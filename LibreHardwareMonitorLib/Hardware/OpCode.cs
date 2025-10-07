@@ -1,4 +1,4 @@
-﻿// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 // Copyright (C) LibreHardwareMonitor and Contributors.
 // Partial Copyright (C) Michael Möller <mmoeller@openhardwaremonitor.org> and Contributors.
@@ -14,6 +14,8 @@ namespace LibreHardwareMonitor.Hardware;
 
 internal static class OpCode
 {
+    public static bool IsSupported { get; private set; }
+
     public static CpuidDelegate CpuId;
     public static RdtscDelegate Rdtsc;
 
@@ -209,6 +211,22 @@ internal static class OpCode
 
     public static unsafe void Open()
     {
+        if (RuntimeInformation.ProcessArchitecture is Architecture.Arm or Architecture.Arm64)
+        {
+            IsSupported = false;
+
+            _codeBuffer = IntPtr.Zero;
+            CpuId = null;
+            Rdtsc = null;
+            _size = 0;
+
+            return;
+        }
+        else
+        {
+            IsSupported = true;
+        }
+
         byte[] rdTscCode;
         byte[] cpuidCode;
         if (IntPtr.Size == 4)
@@ -268,6 +286,8 @@ internal static class OpCode
     {
         Rdtsc = null;
         CpuId = null;
+
+        IsSupported = false;
 
         if (Software.OperatingSystem.IsUnix)
         {
