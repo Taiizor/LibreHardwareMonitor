@@ -20,6 +20,9 @@ internal static class OpCode
     private static IntPtr _codeBuffer;
     private static ulong _size;
 
+    // Check if the current architecture is ARM64
+    private static readonly bool _isArm64 = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+
     // void __stdcall cpuidex(unsigned int index, unsigned int ecxValue,
     //   unsigned int* eax, unsigned int* ebx, unsigned int* ecx,
     //   unsigned int* edx)
@@ -209,6 +212,22 @@ internal static class OpCode
 
     public static unsafe void Open()
     {
+        // On ARM64, CPUID and RDTSC instructions don't exist
+        // Provide stub implementations that return false/0
+        if (_isArm64)
+        {
+            CpuId = (uint index, uint ecxValue, out uint eax, out uint ebx, out uint ecx, out uint edx) =>
+            {
+                eax = 0;
+                ebx = 0;
+                ecx = 0;
+                edx = 0;
+                return false;
+            };
+            Rdtsc = () => 0;
+            return;
+        }
+
         byte[] rdTscCode;
         byte[] cpuidCode;
         if (IntPtr.Size == 4)
@@ -268,6 +287,10 @@ internal static class OpCode
     {
         Rdtsc = null;
         CpuId = null;
+
+        // On ARM64, we didn't allocate any memory, so nothing to free
+        if (_isArm64)
+            return;
 
         if (Software.OperatingSystem.IsUnix)
         {
