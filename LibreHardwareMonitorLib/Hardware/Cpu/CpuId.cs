@@ -1,13 +1,11 @@
-// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+﻿// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 // Copyright (C) LibreHardwareMonitor and Contributors.
 // Partial Copyright (C) Michael Möller <mmoeller@openhardwaremonitor.org> and Contributors.
 // All Rights Reserved.
 
 using System;
-using System.Runtime.InteropServices;
 using System.Text;
-using Windows.Win32.System.SystemInformation;
 
 namespace LibreHardwareMonitor.Hardware.Cpu;
 
@@ -186,38 +184,6 @@ public class CpuId
         ThreadId = ApicId - (ProcessorId << (int)(coreMaskWith + threadMaskWith)) - (CoreId << (int)threadMaskWith);
     }
 
-    private CpuId(int group,
-                  int thread,
-                  GroupAffinity affinity,
-                  string name,
-                  Vendor vendor,
-                  uint processorId,
-                  uint coreId,
-                  uint threadId,
-                  uint family,
-                  uint model,
-                  uint stepping,
-                  uint pkgType,
-                  uint apicId)
-    {
-        Group = group;
-        Thread = thread;
-        Affinity = affinity;
-        Name = name?.Trim() ?? string.Empty;
-        BrandString = Name;
-        Vendor = vendor;
-        ProcessorId = processorId;
-        CoreId = coreId;
-        ThreadId = threadId;
-        Family = family;
-        Model = model;
-        Stepping = stepping;
-        PkgType = pkgType;
-        ApicId = apicId;
-        Data = new uint[0, 0];
-        ExtData = new uint[0, 0];
-    }
-
     public GroupAffinity Affinity { get; }
 
     public uint ApicId { get; }
@@ -263,9 +229,6 @@ public class CpuId
 
         var affinity = GroupAffinity.Single((ushort)group, thread);
 
-        if (!OpCode.IsSupported)
-            return FallbackCpuId.Create(group, thread, affinity);
-
         GroupAffinity previousAffinity = ThreadAffinity.Set(affinity);
         if (previousAffinity == GroupAffinity.Undefined)
             return null;
@@ -308,74 +271,4 @@ public class CpuId
     public const uint CPUID_0 = 0;
     public const uint CPUID_EXT = 0x80000000;
     // ReSharper restore InconsistentNaming
-
-    private static class FallbackCpuId
-    {
-        private static readonly int[] ThreadsPerGroup = InitializeThreadCounts();
-        private static readonly string ProcessorName = InitializeProcessorName();
-
-        public static CpuId Create(int group, int thread, GroupAffinity affinity)
-        {
-            if (group < 0 || group >= ThreadsPerGroup.Length)
-                return null;
-
-            if (thread < 0 || thread >= ThreadsPerGroup[group])
-                return null;
-
-            uint processorId = 0;
-            uint coreId = (uint)thread;
-            uint threadId = 0;
-
-            return new CpuId(group,
-                             thread,
-                             affinity,
-                             ProcessorName,
-                             Vendor.Unknown,
-                             processorId,
-                             coreId,
-                             threadId,
-                             0,
-                             0,
-                             0,
-                             0,
-                             0);
-        }
-
-        private static int[] InitializeThreadCounts()
-        {
-            int groupCount = ThreadAffinity.ProcessorGroupCount;
-            if (groupCount <= 0)
-                return [Math.Max(1, Environment.ProcessorCount)];
-
-            int totalThreads = Math.Max(1, Environment.ProcessorCount);
-            int baseCount = Math.Max(1, totalThreads / groupCount);
-            int remainder = totalThreads - (baseCount * groupCount);
-
-            int[] counts = new int[groupCount];
-            for (int group = 0; group < groupCount; group++)
-            {
-                counts[group] = baseCount;
-                if (remainder > 0)
-                {
-                    counts[group]++;
-                    remainder--;
-                }
-            }
-
-            return counts;
-        }
-
-        private static string InitializeProcessorName()
-        {
-            string identifier = Environment.GetEnvironmentVariable("PROCESSOR_IDENTIFIER");
-            if (!string.IsNullOrWhiteSpace(identifier))
-                return identifier.Trim();
-
-            string machineName = RuntimeInformation.OSDescription;
-            if (!string.IsNullOrWhiteSpace(machineName))
-                return machineName.Trim();
-
-            return RuntimeInformation.ProcessArchitecture.ToString();
-        }
-    }
 }
