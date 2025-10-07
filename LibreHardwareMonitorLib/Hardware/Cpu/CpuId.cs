@@ -1,11 +1,14 @@
-﻿// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 // Copyright (C) LibreHardwareMonitor and Contributors.
 // Partial Copyright (C) Michael Möller <mmoeller@openhardwaremonitor.org> and Contributors.
 // All Rights Reserved.
 
 using System;
+using System.Management;
+using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32;
 
 namespace LibreHardwareMonitor.Hardware.Cpu;
 
@@ -13,7 +16,11 @@ public enum Vendor
 {
     Unknown,
     Intel,
-    AMD
+    AMD,
+    Qualcomm,
+    Apple,
+    ARM,
+    Nvidia
 }
 
 public class CpuId
@@ -30,14 +37,21 @@ public class CpuId
         Group = group;
         Affinity = affinity;
 
-        uint threadMaskWith;
-        uint coreMaskWith;
-        uint maxCpuidExt;
-
         if (thread >= 64)
             throw new ArgumentOutOfRangeException(nameof(thread));
 
+        // ARM64 için özel işlem
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+        {
+            InitializeArm64Info();
+            return;
+        }
+
+        uint threadMaskWith;
+        uint coreMaskWith;
+        uint maxCpuidExt;
         uint maxCpuid;
+
         if (OpCode.CpuId(CPUID_0, 0, out uint eax, out uint ebx, out uint ecx, out uint edx))
         {
             if (eax > 0)
@@ -184,37 +198,104 @@ public class CpuId
         ThreadId = ApicId - (ProcessorId << (int)(coreMaskWith + threadMaskWith)) - (CoreId << (int)threadMaskWith);
     }
 
+    /// <summary>
+    /// ARM64 işlemciler için CPU bilgilerini initialize eder.
+    /// </summary>
+    private void InitializeArm64Info()
+    {
+        try
+        {
+            // WMI kullanarak CPU bilgilerini al
+            using ManagementObjectSearcher searcher = new("SELECT * FROM Win32_Processor");
+            using ManagementObjectCollection processors = searcher.Get();
+
+            foreach (ManagementObject processor in processors)
+            {
+                // CPU name
+                string processorName = processor["Name"]?.ToString() ?? "Unknown ARM64 CPU";
+                BrandString = processorName;
+                Name = processorName;
+
+                // Vendor detection
+                string manufacturer = processor["Manufacturer"]?.ToString()?.ToLower() ?? "";
+                Vendor = manufacturer switch
+                {
+                    var m when m.Contains("qualcomm") => Vendor.Qualcomm,
+                    var m when m.Contains("apple") => Vendor.Apple,
+                    var m when m.Contains("arm") => Vendor.ARM,
+                    var m when m.Contains("nvidia") => Vendor.Nvidia,
+                    _ => Vendor.Unknown
+                };
+
+                // Family, Model, Stepping gibi değerleri ARM64 için yaklaşık değerler
+                Family = 0x8; // ARM64 generic family
+                Model = 0x1;  // Generic model
+                Stepping = 0x0;
+
+                // Core bilgileri
+                ApicId = (uint)Thread;
+                ProcessorId = 0;
+                CoreId = (uint)Thread;
+                ThreadId = 0;
+                PkgType = 0;
+
+                break; // İlk processor bilgisini aldıktan sonra çık
+            }
+
+            // Data ve ExtData dizilerini initialize et (boş olarak)
+            Data = new uint[1, 4];
+            ExtData = new uint[1, 4];
+        }
+        catch (Exception)
+        {
+            // Hata durumunda default değerleri kullan
+            BrandString = "Unknown ARM64 CPU";
+            Name = "Unknown ARM64 CPU";
+            Vendor = Vendor.Unknown;
+            Family = 0x8;
+            Model = 0x1;
+            Stepping = 0x0;
+            ApicId = (uint)Thread;
+            ProcessorId = 0;
+            CoreId = (uint)Thread;
+            ThreadId = 0;
+            PkgType = 0;
+            Data = new uint[1, 4];
+            ExtData = new uint[1, 4];
+        }
+    }
+
     public GroupAffinity Affinity { get; }
 
-    public uint ApicId { get; }
+    public uint ApicId { get; private set; }
 
-    public string BrandString { get; } = string.Empty;
+    public string BrandString { get; private set; } = string.Empty;
 
-    public uint CoreId { get; }
+    public uint CoreId { get; private set; }
 
-    public uint[,] Data { get; } = new uint[0, 0];
+    public uint[,] Data { get; private set; } = new uint[0, 0];
 
-    public uint[,] ExtData { get; } = new uint[0, 0];
+    public uint[,] ExtData { get; private set; } = new uint[0, 0];
 
-    public uint Family { get; }
+    public uint Family { get; private set; }
 
     public int Group { get; }
 
-    public uint Model { get; }
+    public uint Model { get; private set; }
 
-    public string Name { get; } = string.Empty;
+    public string Name { get; private set; } = string.Empty;
 
-    public uint PkgType { get; }
+    public uint PkgType { get; private set; }
 
-    public uint ProcessorId { get; }
+    public uint ProcessorId { get; private set; }
 
-    public uint Stepping { get; }
+    public uint Stepping { get; private set; }
 
     public int Thread { get; }
 
-    public uint ThreadId { get; }
+    public uint ThreadId { get; private set; }
 
-    public Vendor Vendor { get; } = Vendor.Unknown;
+    public Vendor Vendor { get; private set; } = Vendor.Unknown;
 
     /// <summary>
     /// Gets the specified <see cref="CpuId" />.

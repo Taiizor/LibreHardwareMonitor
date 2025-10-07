@@ -1,4 +1,4 @@
-﻿// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
 // If a copy of the MPL was not distributed with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 // Copyright (C) LibreHardwareMonitor and Contributors.
 // Partial Copyright (C) Michael Möller <mmoeller@openhardwaremonitor.org> and Contributors.
@@ -209,6 +209,30 @@ internal static class OpCode
 
     public static unsafe void Open()
     {
+        // ARM64 için özel durum - CPUID komutu x86/x64 specific'tir
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+        {
+            // ARM64 için mock implementasyonlar
+            CpuId = (uint index, uint ecxValue, out uint eax, out uint ebx, out uint ecx, out uint edx) =>
+            {
+                // ARM64'te CPUID yok, false döndürerek bu durumu belirtiyoruz
+                eax = ebx = ecx = edx = 0;
+                return false;
+            };
+            
+            Rdtsc = () =>
+            {
+                // ARM64 için counter register kullanarak yaklaşık değer
+#if NET8_0_OR_GREATER
+                return (ulong)Environment.TickCount64;
+#else
+                return (ulong)Environment.TickCount;
+#endif
+            };
+            
+            return;
+        }
+
         byte[] rdTscCode;
         byte[] cpuidCode;
         if (IntPtr.Size == 4)
@@ -268,6 +292,12 @@ internal static class OpCode
     {
         Rdtsc = null;
         CpuId = null;
+
+        // ARM64 için özel durum - kod buffer'ı kullanılmadı
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+        {
+            return;
+        }
 
         if (Software.OperatingSystem.IsUnix)
         {
