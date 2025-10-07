@@ -17,6 +17,13 @@ You can read information from devices such as:
 - HDD, SSD and NVMe hard drives
 - Network cards
 
+## Platform Support
+LibreHardwareMonitor supports multiple platforms and architectures:
+- **Windows**: x86, x64, ARM64
+- **Linux**: x86, x64, ARM64
+
+**Note on ARM64**: Due to architectural differences, CPU-specific monitoring (temperature, frequency, CPUID information) is not available on ARM64 processors. Other hardware monitoring features (storage, network, memory, etc.) work as expected.
+
 ## Where can I download it?
 You can download the latest release [here](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/releases). You can also install it using WinGet:
 
