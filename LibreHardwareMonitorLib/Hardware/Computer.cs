@@ -663,6 +663,10 @@ public class Computer : IComputer
         // Create a temporary cpu group if one has not been added.
         lock (_lock)
         {
+            // If CPU is not enabled, return empty list to avoid creating CpuGroup
+            if (!_cpuEnabled)
+                return new List<IntelCpu>();
+
             IGroup cpuGroup = _groups.Find(x => x is CpuGroup) ?? new CpuGroup(_settings);
             return cpuGroup.Hardware.Select(x => x as IntelCpu).ToList();
         }

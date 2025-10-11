@@ -5,6 +5,7 @@
 // All Rights Reserved.
 
 using System;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace LibreHardwareMonitor.Hardware.Cpu;
@@ -29,6 +30,12 @@ public class CpuId
         Thread = thread;
         Group = group;
         Affinity = affinity;
+
+        // Check if we're running on ARM64 architecture
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+        {
+            throw new PlatformNotSupportedException("CpuId is not supported on ARM64 architecture.");
+        }
 
         uint threadMaskWith;
         uint coreMaskWith;
@@ -224,6 +231,10 @@ public class CpuId
     /// <returns><see cref="CpuId" />.</returns>
     public static CpuId Get(int group, int thread)
     {
+        // Return null on ARM64 architecture to avoid crashes
+        if (RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            return null;
+
         if (thread >= 64)
             return null;
 
